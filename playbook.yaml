@@ -129,7 +129,7 @@
           CGI::Application CGI::Application::Plugin::Authentication
           CGI::Application::Plugin::Session CGI::Session
     - name: Use systemd
-      nsible.builtin.copy:
+      ansible.builtin.copy:
         src: wsl.conf
         dest: /etc/wsl.conf
         owner: root
