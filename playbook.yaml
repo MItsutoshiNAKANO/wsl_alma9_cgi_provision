@@ -2,6 +2,13 @@
   hosts: localhost
   become: yes
   tasks:
+    - name: Use systemd
+      ansible.builtin.copy:
+        src: wsl.conf
+        dest: /etc/wsl.conf
+        owner: root
+        group: root
+        mode: '0644'
     - name: Enable CRB
       ansible.builtin.command:
         cmd: dnf config-manager --set-enabled crb
@@ -128,21 +135,43 @@
           echo yes | cpan -T
           CGI::Application CGI::Application::Plugin::Authentication
           CGI::Application::Plugin::Session CGI::Session
-    - name: Remove /etc/wsl.conf if it exists
+
+    - name: Create public_html directory
       ansible.builtin.file:
-        path: /etc/wsl.conf
+        path: /home/vagrant/public_html
+        state: directory
+    - name: Create public_html/cgi-bin directory
+      ansible.builtin.file:
+        path: /home/vagrant/public_html/cgi-bin
+        state: directory
+    - name: Create public_html/html link
+      ansible.builtin.file:
+        src: /home/vagrant/public_html
+        dest: /home/vagrant/public_html/html
+        state: link
+    - name: Unlink the default WWW directory
+      ansible.builtin.file:
+        path: /var/www
         state: absent
-    - name: Use systemd
-      ansible.builtin.copy:
-        src: wsl.conf
-        dest: /etc/wsl.conf
-        owner: root
-        group: root
-        mode: '0644'
-    - name: Reboot
-      ansible.builtin.reboot:
-        reboot_timeout: 60
-        reboot_msg: "Rebooting the system to apply changes"
+    - name: Link the default WWW directory to the Vagrant public_html directory
+      ansible.builtin.file:
+        src: /home/vagrant/public_html
+        dest: /var/www
+        state: link
+    - name: Change EnableSendfile to off in Apache HTTPD Server configuration
+      ansible.builtin.replace:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: 'EnableSendfile on'
+        replace: 'EnableSendfile off'
+    - name: Change /home/vagrant permission to 755
+      ansible.builtin.file:
+        path: /home/vagrant
+        mode: '0755'
+    - name: Start and enable Apache HTTPD Server
+      ansible.builtin.systemd:
+        name: httpd
+        state: started
+        enabled: yes
     - name: Stop PostgreSQL Server
       ansible.builtin.systemd:
         name: postgresql
@@ -154,28 +183,6 @@
     - name: Initialize a new PostgreSQL database
       ansible.builtin.command:
         cmd: sudo -u postgres initdb -D /var/lib/pgsql/data
-    - name: Create public_html directory
-      ansible.builtin.file:
-        path: /home/vagrant/public_html
-        state: directory
-    - name: Create public_html/cgi-bin directory
-      ansible.builtin.file:
-        path: /home/vagrant/public_html/cgi-bin
-        state: directory
-    - name: Create public_html/www link
-      ansible.builtin.file:
-        src: /home/vagrant/public_html
-        dest: /home/vagrant/public_html/www
-        state: link
-    - name: Unlink the default WWW directory
-      ansible.builtin.file:
-        path: /var/www
-        state: absent
-    - name: Link the default WWW directory to the Vagrant public_html directory
-      ansible.builtin.file:
-        src: /home/vagrant/public_html
-        dest: /var/www
-        state: link
     - name: Start and enable PostgreSQL Server
       ansible.builtin.systemd:
         name: postgresql
@@ -187,13 +194,3 @@
     - name: Create a new PostgreSQL tables
       ansible.builtin.command:
         cmd: sudo -u vagrant psql --file ddl/0020-create-tables.sql
-    - name: Change EnableSendfile to off in Apache HTTPD Server configuration
-      ansible.builtin.replace:
-        path: /etc/httpd/conf/httpd.conf
-        regexp: 'EnableSendfile on'
-        replace: 'EnableSendfile off'
-    - name: Start and enable Apache HTTPD Server
-      ansible.builtin.systemd:
-        name: httpd
-        state: started
-        enabled: yes
